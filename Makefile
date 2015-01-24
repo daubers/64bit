@@ -1,4 +1,4 @@
-export PATH := /home/barnaby/bin/avr8-gnu-toolchain-linux_x86_64/bin:$(PATH)
+#lfuse = 0xEF;
 
 CPU = attiny841
 
@@ -11,7 +11,7 @@ OBJCP = $(TOOLCHAIN)objcopy
 AR = $(TOOLCHAIN)ar
 
 #CPPFLAGS += -ffunction-sections -fdata-sections -Wl,--gc-sections -Wl,--print-gc-sections
-CPPFLAGS += -Os -DF_CPU=1000000
+CPPFLAGS += -Os -DF_CPU=16000000
 CPPFLAGS += -Wall -Werror
 CPPFLAGS += -g
 CPPFLAGS += -mmcu=$(CPU)
@@ -34,9 +34,9 @@ clean:
 main: main.o uart.o
 
 upload: main.hex
-	avrdude -c avrispmkII -p $(CPU) -U flash:w:$+:i
+	avrdude -c avrispmkII -p $(CPU) -P usb -U flash:w:$+:i
 
 run: upload
-	miniterm.py /dev/ttyUSB0 115200
+	miniterm.py /dev/ttyUSB0 38400
 
 -include $(wildcard *.d)

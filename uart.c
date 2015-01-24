@@ -9,13 +9,9 @@
 #include <avr/interrupt.h>
 #include <stdio.h>
 #include <util/delay.h>
+#include "main.h"
 
-#define BAUD 9600
 #include <util/setbaud.h>
-
-#define UART_TX_BUFFER_SIZE 64
-#define UART_RX_BUFFERS     4
-#define UART_RX_BUFFER_SIZE 64
 
 struct tx_ring {
     int buffer[UART_TX_BUFFER_SIZE];
@@ -55,7 +51,7 @@ int uart_putchar(char c, FILE *stream) {
     if (write_pointer != tx_buffer.start) {
         tx_buffer.buffer[tx_buffer.end] = c;
         tx_buffer.end = write_pointer;
-        UCSR0B |= _BV(UDRIE0);
+        UCSR0B |= _BV(UDRIE0) | _BV(TXCIE0);
     }
     return 0;
 }
@@ -87,11 +83,13 @@ ISR(USART0_RX_vect) {
 
 ISR(USART0_UDRE_vect) {
     if (tx_buffer.start != tx_buffer.end) {
-        PORTA |= _BV(0);
+        HIGH(RS485_DIR);
         UDR0 = tx_buffer.buffer[tx_buffer.start];
         tx_buffer.start = (tx_buffer.start + 1) % UART_TX_BUFFER_SIZE;
     } else {
         UCSR0B &= ~_BV(UDRIE0);
-        //TODO: switch direction needs TXC?
     }
+}
+ISR(USART0_TX_vect) {
+    LOW(RS485_DIR);
 }
