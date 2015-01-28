@@ -1,4 +1,4 @@
-    /*
+/*
  * 64bit IO
  *
  * © 2015 b@Zi.iS
@@ -14,12 +14,16 @@
  *
  */
 
-#include <stdio.h>
-#include <avr/io.h>
+#include <stdbool.h>
 #include <avr/interrupt.h>
 #include <util/delay.h>
 #include "main.h"
 #include "uart.h"
+
+uint8_t last[8];
+uint8_t cur[8];
+uint8_t dir[8];
+int8_t id = 40;
 
 unsigned char spi(unsigned char data) {
     SPDR = data;
@@ -37,57 +41,46 @@ int main(void) {
 
     HIGH(BLANK); //High till we have clocked data
 
-    uart_init();
-    stdout = &uart_output;
+    uart_init(42);
 
     SPCR |= _BV(SPE) | _BV(MSTR) | _BV(SPR0); //SPI, Master, fck/16
 
     sei();
 
-    //Clear Outputs
-    spi(0x00);
-    spi(0x00);
-    spi(0x00);
-    spi(0x00);
-    spi(0x00);
-    spi(0x00);
-    spi(0x00);
-    spi(0x00);
+    for(uint8_t i = 0; i<8; i++) {
+        spi(0); //disable all inputs and outputs
+    }
     HIGH(LATCH);
-    LOW(BLANK);
-    _delay_ms(1); //LOD detection
+    _delay_ms(1); //>20ns
     LOW(LATCH);
 
-    while(1) {
-        spi(0b10101010);
-        spi(0b10101010);
-        spi(0b10101010);
-        spi(0b10101010);
-        spi(0b10101010);
-        spi(0b10101010);
-        spi(0b10101010);
-        spi(0b10101010);
-        HIGH(LATCH);
-        LOW(BLANK);
-        _delay_ms(1);
-        LOW(LATCH);
-        _delay_ms(500);
+    while(true) {
+        uint8_t next;
 
-        //READ: Note should be banked to avoid overload
-        printf("%X%X%X%X\n",
-            spi(0xFF) +
-            (spi(0xFF) << 8),
-            spi(0xFF) +
-            (spi(0xFF) << 8),
-            spi(0xFF) +
-            (spi(0xFF) << 8),
-            spi(0xFF) +
-            (spi(0xFF) << 8)
-        );
-        HIGH(LATCH);
-        _delay_ms(1);
-        HIGH(BLANK);
-        LOW(LATCH);
+        HIGH(LATCH); //Start outputing and testing inputs
+        for(uint8_t i = 0; i<8; i++) {
+            spi(cur[1]); //clock out outputs
+            if(i == 1) { //>20ns needed for latch
+                LOW(LATCH);
+            }
+            if(i == 6) { //detect >1µs after previous latch and >20ns before next
+                HIGH(BLANK); //Sore inputs and stop outputing
+            }
+        }
+        HIGH(LATCH); //Start driving just outputs, copy input states into shift register
+        LOW(BLANK); //Start outputing
+
+        for(uint8_t i = 0; i<8; i++) {
+            if(i == 1) { //>20ns needed for latch
+                LOW(LATCH);
+            }
+            next = spi(cur[i] | dir[i]) & dir[i]; // clock out both outputs and inputs, clock in intputs
+            if(last[i] != next) {
+                last[i] = next;
+                uart_send(i, last[i]);
+            }
+        }
+
+        uart_poll_clear_to_send();
     }
 }
-

@@ -1,8 +1,7 @@
 #define BAUD_TOL 3
 #define BAUD 38400
-#define UART_TX_BUFFER_SIZE 64
-#define UART_RX_BUFFERS     1
-#define UART_RX_BUFFER_SIZE 8
+
+#define UART_TX_BUFFER_SIZE 16
 
 #define BLANK_port A
 #define BLANK_pin 7
@@ -25,3 +24,6 @@
 #define OUTPUT(x) __hack(DDR, x ## _port) |= _BV(x ## _pin)
 #define HIGH(x) __hack(PORT, x ## _port) |= _BV(x ## _pin)
 #define LOW(x) __hack(PORT, x ## _port) &= ~_BV(x ## _pin)
+
+uint8_t cur[8];
+uint8_t dir[8];

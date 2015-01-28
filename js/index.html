@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+    <head>
+    <style>
+        div span {
+            display: inline-block;
+            width: 1em;
+            height: 1em;
+            background-color: gray;
+        }
+    </style>
+    <body>
+        <div>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+        <div>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+        <div>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+        <div>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+        <div>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+        <div>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+        <div>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+        <div>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+        <script>
+            var ws = new WebSocket('ws://localhost:8080');
+            document.body.addEventListener("click", function (event) {
+                if (event.target.tagName == "SPAN") {
+                    if(!(
+                        event.target.style.backgroundColor == 'red'
+                    ||
+                        event.target.style.backgroundColor == 'green'
+                    )) {
+                        event.target.style.backgroundColor = event.target.style.backgroundColor == 'yellow' ? 'gray' : 'yellow';
+                    }
+
+                    var data = 0;
+                    for(var j=0; j<8; j++) {
+                        if(
+                            event.target.parentElement.children[j].style.backgroundColor == 'yellow'
+                        ) {
+                            data |= 1<<j;
+                        }
+                    }
+                                        
+                    var add = Array.prototype.indexOf.call(event.target.parentElement.parentElement.children, event.target.parentElement)
+
+                    ws.send(JSON.stringify({type: true, id: 42, add: add, data:data}));
+
+                }
+            });
+            document.body.addEventListener("dblclick", function (event) {
+                if (event.target.tagName == "SPAN") {
+                    event.target.style.backgroundColor = event.target.style.backgroundColor == 'red' ? 'gray' : 'red';
+                    var data = 0;
+                    for(var j=0; j<8; j++) {
+                        if(
+                            event.target.parentElement.children[j].style.backgroundColor == 'red'
+                        ||
+                            event.target.parentElement.children[j].style.backgroundColor == 'green'
+                        ) {
+                            data |= 1<<j;
+                        }
+                    }
+                                        
+                    var add = Array.prototype.indexOf.call(event.target.parentElement.parentElement.children, event.target.parentElement)
+
+                    ws.send(JSON.stringify({type: false, id: 42, add: add, data:data}));
+                }
+            });
+            ws.onmessage = function (event) {
+                var msg = JSON.parse(event.data);
+                console.log(msg);
+                for(var j=0; j<8; j++) {
+                    if (
+                        document.body.children[msg.add].children[j].style.backgroundColor == 'green'
+                    ||
+                        document.body.children[msg.add].children[j].style.backgroundColor == 'red'
+                    ) {
+                        document.body.children[msg.add].children[j].style.backgroundColor = (msg.data & (1<<j)) ? 'red' : 'green';
+                    }   
+                }
+            };
+        </script>
+    </body>
+</html>
