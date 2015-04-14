@@ -5,6 +5,7 @@
  */
 
 #include <avr/io.h>
+#include <stdbool.h>
 #include <avr/interrupt.h>
 #include <stdio.h>
 #include <util/delay.h>
@@ -12,44 +13,13 @@
 
 #include <util/setbaud.h>
 
-struct {
-    int start;
-    int end;
-    union {
-        uint8_t bytes[UART_TX_BUFFER_SIZE * 3];
-        struct {
-            uint8_t id:7;
-            uint8_t head:1;
-
-            uint8_t data7:1;
-            uint8_t res:3;
-            uint8_t add:3;
-            uint8_t body:1;
-
-            uint8_t data0123456:7;
-            uint8_t body2:1;
-
-        } msg[UART_TX_BUFFER_SIZE];
-    } buffer;
-} tx_buffer;
+uint8_t tx[UART_TX_BUFFER_SIZE];
+uint8_t tx_start;
+uint8_t tx_end = 2;
+uint8_t tx_checksum = 0;
+uint8_t tx_sending = 0;
 
 uint8_t _id;
-
-union {
-    uint8_t byte;
-    struct {
-        uint8_t msb:1;
-        uint8_t res:2;
-        uint8_t type:1;
-        uint8_t add:3;
-        uint8_t head:1;
-    } msg;
-} add;
-
-#define SEEN_MY_ADDRESS 255
-#define NOT_IN_MESSAGE 254
-#define SEEN_OTHER_ADDRESS 253
-#define SEEN_OTHER_BODY 252
 
 void uart_init(char id) {
     UBRR0H = UBRRH_VALUE;
@@ -61,63 +31,119 @@ void uart_init(char id) {
     UCSR0A &= ~(_BV(U2X0));
 #endif
 
-    //UCSR0C = _BV(UCSZ01) | _BV(UCSZ00); //8-bit
     UCSR0B = _BV(RXCIE0) | _BV(RXEN0) | _BV(TXEN0) | _BV(TXCIE0);   //Enable
+    UCSR0C = _BV(UCSZ01) | _BV(UCSZ00) | _BV(UPM01); //8-bit, even parity
 
-    for(int i=0; i<UART_TX_BUFFER_SIZE; i++) {
-        tx_buffer.buffer.msg[i].head = 1;
-        tx_buffer.buffer.msg[i].id = id;
-    }
-    _id = id | 0x80;
-    add.byte = 254;
+    _id = id;
 }
 
-void uart_send(char address, char data) {
-    tx_buffer.buffer.msg[tx_buffer.end/3].add = address & 0b111;
-    tx_buffer.buffer.msg[tx_buffer.end/3].data7 = (data & 0x80) >> 7;
-    tx_buffer.buffer.msg[tx_buffer.end/3].data0123456 = data & ~0x80;
-    tx_buffer.end = (tx_buffer.end + 3) % (UART_TX_BUFFER_SIZE * 3);
+void uart_send(char add, char data) {
+    //Can't really check overflow, as outputing the error would just overflow more
+    tx_checksum ^= add;
+    tx[tx_end++] = add;
+    tx_end %= UART_TX_BUFFER_SIZE;
+    tx_checksum ^= data;
+    tx[tx_end++] = data;
+    tx_end %= UART_TX_BUFFER_SIZE;
+    if(data == 0xFF) {
+        tx[tx_end++] = data;
+        tx_end %= UART_TX_BUFFER_SIZE;
+    }
 }
 
-void uart_poll_clear_to_send() {
-    if((tx_buffer.start != tx_buffer.end) & !(UCSR0D & _BV(6))) {
-        UCSR0B |= _BV(UDRIE0);
+void error(char data) {
+    uart_send(0x7F, data);
+}
+
+void reply() {
+    HIGH(RS485_DIR);
+    _delay_ms(1);
+    tx_sending = tx_end;
+    tx[tx_start] = 0x80 | (tx_sending + UART_TX_BUFFER_SIZE - tx_start) % UART_TX_BUFFER_SIZE;
+    if (tx_checksum == 0xFF) {
+        tx_checksum = 0;
     }
+    tx[tx_start + 1] = tx_checksum;
+    tx_end += 2;
+    tx_end %= UART_TX_BUFFER_SIZE;
+    tx_checksum = 0;
+    UCSR0B |= _BV(UDRIE0);
 }
 
 ISR(USART0_RX_vect) {
-    int b = UDR0;
-    if(b & 0x80) {
-        if(b == _id) {
-            add.byte = SEEN_MY_ADDRESS;
-        } else {
-            add.byte = SEEN_OTHER_ADDRESS;
+    static uint8_t rx[3];
+    static uint8_t rxidx = 0;
+    static uint8_t checksum = 0;
+    static bool skipff = FALSE;
+    static bool packet = FALSE;
+
+    if (UCSR0A & _BV(FE0)) {
+        packet = FALSE;
+        error('F');
+        UDR0;
+        return;
+    }
+    if (UCSR0A & _BV(UPE0)) {
+        packet = FALSE;
+        error('P');
+        UDR0;
+        return;
+    }
+    if (UCSR0A & _BV(DOR0)) {
+        packet = FALSE;
+        error('O');
+        UDR0;
+        return;
+    }
+    rx[rxidx] = UDR0;
+    if(!packet) {
+        //Packets start with 0xFF, ID
+        if(rx[(rxidx + 1) % 3] != 0xFF && rx[(rxidx + 2) % 3] == 0xFF && rx[rxidx] == _id) {
+            packet = TRUE;
+            checksum = rx[rxidx];
+            skipff = FALSE;
+            rxidx = 0;
+            return;
         }
     } else {
-        if(add.byte == SEEN_MY_ADDRESS) {
-            add.byte = b;
-        } else if(add.byte < 128) {
-            if(add.msg.type) {
-                cur[add.msg.add] = b | add.msg.msb << 7;
+        //all other 0xFF are escaped by repeating
+        if(rx[rxidx] == 0xFF) {
+            if(!skipff) {
+                skipff = TRUE;
+                return;
             } else {
-                dir[add.msg.add] = b | add.msg.msb << 7;
+                skipff = FALSE;
             }
-            add.byte = NOT_IN_MESSAGE;
-            UCSR0D |= _BV(6); //Clear RX Start so we can send
-        } else if(add.byte == SEEN_OTHER_ADDRESS) {
-            add.byte = SEEN_OTHER_BODY;
-        } else if(add.byte == SEEN_OTHER_BODY) {
-            add.byte = NOT_IN_MESSAGE;
-            UCSR0D |= _BV(6); //Clear RX Start so we can send
+        } else {
+            if(skipff) {
+                packet = FALSE;
+                error('E');
+                return;
+            }
         }
+        if(rxidx == 2) {
+            if(checksum != rx[2]) {
+                packet = FALSE;
+                error('C');
+                return;
+            }
+            if(rx[0] > 7) {
+                dir[rx[0]-8] = rx[1];
+            } else {
+                cur[rx[0]] = rx[1];
+            }
+            packet = FALSE;
+            reply();
+        }
+        checksum ^= rx[rxidx];
     }
+    rxidx++;
 }
 
 ISR(USART0_UDRE_vect) {
-    if (tx_buffer.start != tx_buffer.end) {
-        HIGH(RS485_DIR);
-        UDR0 = tx_buffer.buffer.bytes[tx_buffer.start];
-        tx_buffer.start = (tx_buffer.start + 1) % (UART_TX_BUFFER_SIZE * 3);
+    if (tx_start != tx_sending) {
+        UDR0 = tx[tx_start++];
+        tx_start %= UART_TX_BUFFER_SIZE;
     } else {
         UCSR0B &= ~_BV(UDRIE0);
     }

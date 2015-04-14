@@ -21,9 +21,7 @@
 #include "uart.h"
 
 uint8_t last[8];
-uint8_t cur[8];
-uint8_t dir[8];
-int8_t id = 40;
+const int8_t id = 42;
 
 unsigned char spi(unsigned char data) {
     SPDR = data;
@@ -41,25 +39,35 @@ int main(void) {
 
     HIGH(BLANK); //High till we have clocked data
 
-    uart_init(42);
+    uart_init(id);
 
     SPCR |= _BV(SPE) | _BV(MSTR) | _BV(SPR0); //SPI, Master, fck/16
 
     sei();
 
-    for(uint8_t i = 0; i<8; i++) {
+    for(uint8_t i = 0; i < 8; i++) {
         spi(0); //disable all inputs and outputs
     }
+
     HIGH(LATCH);
     _delay_ms(1); //>20ns
     LOW(LATCH);
+
+    uart_send(0x7E, id);
+    uart_send(0x7E, id);
+    uart_send(0x7E, id);
+    uart_send(0x7E, id);
+    uart_send(0x7E, id);
+    uart_send(0x7E, id);
+    uart_send(0x7E, id);
+    uart_send(0x7E, id);
 
     while(true) {
         uint8_t next;
 
         HIGH(LATCH); //Start outputing and testing inputs
-        for(uint8_t i = 0; i<8; i++) {
-            spi(cur[1]); //clock out outputs
+        for(uint8_t i = 0; i < 8; i++) {
+            spi(cur[i]); //clock out outputs
             if(i == 1) { //>20ns needed for latch
                 LOW(LATCH);
             }
@@ -70,7 +78,7 @@ int main(void) {
         HIGH(LATCH); //Start driving just outputs, copy input states into shift register
         LOW(BLANK); //Start outputing
 
-        for(uint8_t i = 0; i<8; i++) {
+        for(uint8_t i = 0; i < 8; i++) {
             if(i == 1) { //>20ns needed for latch
                 LOW(LATCH);
             }
@@ -80,7 +88,5 @@ int main(void) {
                 uart_send(i, last[i]);
             }
         }
-
-        uart_poll_clear_to_send();
     }
 }

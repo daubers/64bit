@@ -1,5 +1,8 @@
 #lfuse = 0xEF;
 
+BAUD = 38400
+#20000000
+#38400
 CPU = attiny841
 
 TOOLCHAIN = avr-
@@ -11,7 +14,8 @@ OBJCP = $(TOOLCHAIN)objcopy
 AR = $(TOOLCHAIN)ar
 
 #CPPFLAGS += -ffunction-sections -fdata-sections -Wl,--gc-sections -Wl,--print-gc-sections
-CPPFLAGS += -Os -DF_CPU=16000000
+CPPFLAGS += -MMD
+CPPFLAGS += -Os -DF_CPU=16000000 -DBAUD=$(BAUD)
 CPPFLAGS += -Wall -Werror
 CPPFLAGS += -g
 CPPFLAGS += -mmcu=$(CPU)
@@ -21,6 +25,10 @@ CXXFLAGS = -std=gnu++11
 
 LDFLAGS = -mmcu=$(CPU)
 LDLIBS = -lm
+
+DEPS := $(COBJS:.o=.d)
+
+-include $(DEPS)
 
 all: main.hex
 
@@ -34,9 +42,9 @@ clean:
 main: main.o uart.o
 
 upload: main.hex
-	avrdude -c avrispmkII -p $(CPU) -P usb -U flash:w:$+:i
+	avrdude -B0.3 -b1000000 -c dragon_isp -p $(CPU) -P usb -U flash:w:$+:i && touch $@
 
 run: upload
-	miniterm.py /dev/ttyUSB0 38400
+	miniterm.py --parity=E /dev/ttyUSB0 $(BAUD)
 
 -include $(wildcard *.d)
