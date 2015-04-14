@@ -2,3 +2,6 @@ main
 *.hex
 *.lst
 *.o
+*.d
+js/node_modules/
+upload
