@@ -57,7 +57,7 @@ void error(char data) {
 
 void reply() {
     HIGH(RS485_DIR);
-    _delay_ms(1);
+    _delay_ms(10);
     tx_sending = tx_end;
     tx[tx_start] = 0x80 | (tx_sending + UART_TX_BUFFER_SIZE - tx_start) % UART_TX_BUFFER_SIZE;
     if (tx_checksum == 0xFF) {
@@ -80,19 +80,19 @@ ISR(USART0_RX_vect) {
     if (UCSR0A & _BV(FE0)) {
         packet = FALSE;
         error('F');
-        UDR0;
+        rx[rxidx] = UDR0;
         return;
     }
     if (UCSR0A & _BV(UPE0)) {
         packet = FALSE;
         error('P');
-        UDR0;
+        rx[rxidx] = UDR0;
         return;
     }
     if (UCSR0A & _BV(DOR0)) {
         packet = FALSE;
         error('O');
-        UDR0;
+        rx[rxidx] = UDR0;
         return;
     }
     rx[rxidx] = UDR0;
@@ -150,5 +150,6 @@ ISR(USART0_UDRE_vect) {
 }
 
 ISR(USART0_TX_vect) {
+    _delay_ms(10);
     LOW(RS485_DIR);
 }

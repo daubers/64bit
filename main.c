@@ -88,5 +88,7 @@ int main(void) {
                 uart_send(i, last[i]);
             }
         }
+
+        _delay_ms(20);
     }
 }

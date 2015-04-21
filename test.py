@@ -1,4 +1,4 @@
-#! /usr/bin/env python3
+#! /usr/bin/env python2
 
 DEBUG = True
 
@@ -6,7 +6,7 @@ import serial
 import time
 import random
 
-s = serial.Serial('/dev/ttyUSB0', baudrate=38400, timeout=.1, parity=serial.PARITY_EVEN)
+s = serial.Serial('/dev/ttyUSB0', baudrate=38400, timeout=.5, parity=serial.PARITY_EVEN)
 
 boards = {
     42: [
@@ -25,20 +25,21 @@ boards = {
 }
 
 def escape(data):
-    s.write([data])
+    s.write(chr(data))
     if data == 0xFF:
-        s.write([data])
+        s.write(chr(data))
 
 def send(id, address, data):
     if DEBUG:
         print("[debug %d] %02X %02X" % (id, address, data))
-    s.write([0, 0xFF])
-    s.write([id])
-    s.write([address])
+    s.write(chr(0))
+    s.write(chr(0xFF))
+    s.write(chr(id))
+    s.write(chr(address))
     escape(data)
     escape(id ^ address ^ data)
     try:
-        rlen = s.read()[0] - 0x82
+        rlen = ord(s.read()) - 0x82
     except:
         print("[ERROR %d] no reply" % id)
         time.sleep(1)
@@ -47,8 +48,8 @@ def send(id, address, data):
     if rlen < 0 or rlen > 128:
         print("[ERROR %d] invalid length" % id)
         return False
-    checksum = s.read()[0]
-    data = s.read(rlen)
+    checksum = ord(s.read())
+    data = [ord(d) for d in s.read(rlen)]
     if DEBUG:
         print("[DEBUG %d] %d: %s" % (id, rlen, " ".join(['%02X' % d for d in data])))
     if len(data) != rlen:
@@ -86,6 +87,7 @@ def send(id, address, data):
                     return False
             else:
                 boards[id][2][add] = data
+    time.sleep(.050)
     return True
 
 while True:

@@ -1,6 +1,7 @@
 #lfuse = 0xEF;
 
 BAUD = 38400
+#2400
 #20000000
 #38400
 CPU = attiny841
@@ -15,7 +16,7 @@ AR = $(TOOLCHAIN)ar
 
 #CPPFLAGS += -ffunction-sections -fdata-sections -Wl,--gc-sections -Wl,--print-gc-sections
 CPPFLAGS += -MMD
-CPPFLAGS += -Os -DF_CPU=16000000 -DBAUD=$(BAUD)
+CPPFLAGS += -Os -DF_CPU=15999200 -DBAUD=$(BAUD)
 CPPFLAGS += -Wall -Werror
 CPPFLAGS += -g
 CPPFLAGS += -mmcu=$(CPU)

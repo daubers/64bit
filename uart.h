@@ -5,3 +5,4 @@
 void uart_init(char);
 void uart_send(char, char);
 void uart_poll_clear_to_send();
+void reply();
