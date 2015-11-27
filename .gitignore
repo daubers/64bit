@@ -1,5 +1,6 @@
 main
 *.hex
+!binaries/**/*.hex
 *.lst
 *.o
 *.d
